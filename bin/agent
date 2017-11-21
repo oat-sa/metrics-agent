@@ -1,0 +1,14 @@
+#!/usr/bin/php
+<?php
+
+require dirname(__DIR__) .  '/vendor/autoload.php';
+
+$awsConfig = (object)include dirname(__DIR__) . '/config/aws.php';
+
+$credentials = new Aws\Credentials\Credentials(
+    $awsConfig->key,
+    $awsConfig->secret
+);
+
+$Collect = new \OAT\Agent\Collect($credentials, $awsConfig->region);
+$Collect->run();
