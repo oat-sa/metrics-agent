@@ -43,16 +43,55 @@ class Collect
 
     public function run()
     {
-        $rule = 'isBiz AND consumedreadcapacityaverage(table, 2) < provisionedreadcapacity';
-
-        if ($this->rulesDynamoDbScaleDown($rule)) {
+        $ruleDown = 'isBiz AND consumedreadcapacityaverage(table, 2) < provisionedreadcapacity';
+        $ruleUp = 'isBiz AND consumedreadcapacityaverage(table, 2) > provisionedreadcapacity';
+        if ($this->rulesDynamoDbScaleDown($ruleDown)) {
             $this->scaleDownAction();
+        }
+        elseif ($this->rulesDynamoDbScaleUp($ruleUp)) {
+            $this->scaleUpAction();
         }
     }
 
     protected function scaleDownAction()
     {
         echo "I want scale down!\n";
+        $table = 'luoat22exx_deliveryExecution';
+        var_dump($this->dynamodbClient->describeTable(["TableName"=>$table]));
+        var_dump($this->dynamodbClient->describeLimits());
+        var_dump($this->decreaseReadCapacity($table, 5, 5));
+    }
+
+    protected function scaleUpAction()
+    {
+        echo "I want scale up!\n";
+        $table = 'luoat22exx_deliveryExecution';
+        var_dump($this->dynamodbClient->describeTable(["TableName"=>$table]));
+        var_dump($this->dynamodbClient->describeLimits());
+        var_dump($this->decreaseReadCapacity($table, 10, 10));
+    }
+
+    protected function decreaseReadCapacity($table, $readCapacity, $writeCapacity)
+    {
+        $params = [
+          'ProvisionedThroughput' => [
+              'ReadCapacityUnits' => $readCapacity, // REQUIRED
+              'WriteCapacityUnits' => $writeCapacity, // REQUIRED
+          ],
+          'TableName' => $table,
+        ];
+        return $this->dynamodbClient->updateTable($params);
+    }
+    protected function increaseReadCapacity($table, $readCapacity, $writeCapacity)
+    {
+        $params = [
+          'ProvisionedThroughput' => [
+              'ReadCapacityUnits' => $readCapacity, // REQUIRED
+              'WriteCapacityUnits' => $writeCapacity, // REQUIRED
+          ],
+          'TableName' => $table,
+        ];
+        return $this->dynamodbClient->updateTable($params);
     }
 
     public function dynamodb($table, int $period)
@@ -89,20 +128,36 @@ class Collect
         return $averageReadCapacity;
     }
 
-    protected function rulesDynamoDbScaleDown($rule): bool
+    protected function rulesDynamoDbScaleDown($ruleDown): bool
     {
         $ruler = new Ruler();
         $ruler->getDefaultAsserter()->setOperator('consumedreadcapacityaverage', [$this, 'dynamodb']);
-        
+
         $table = 'luoat22exx_deliveryExecution';
         $describeDynamoDbTableResult = $this->dynamodbClient->describeTable(['TableName' => $table]);
-        
+
         $context = new Context();
         $context['isBiz'] = true;
         $context['table'] = $table;
         $context['provisionedreadcapacity'] = $describeDynamoDbTableResult['Table']['ProvisionedThroughput']['ReadCapacityUnits'];
         $context['provisionedwritecapacity'] = $describeDynamoDbTableResult['Table']['ProvisionedThroughput']['WriteCapacityUnits'];
 
-        return $ruler->assert($rule, $context);
+        return $ruler->assert($ruleDown, $context);
+    }
+    protected function rulesDynamoDbScaleUp($ruleUp): bool
+    {
+        $ruler = new Ruler();
+        $ruler->getDefaultAsserter()->setOperator('consumedreadcapacityaverage', [$this, 'dynamodb']);
+
+        $table = 'luoat22exx_deliveryExecution';
+        $describeDynamoDbTableResult = $this->dynamodbClient->describeTable(['TableName' => $table]);
+
+        $context = new Context();
+        $context['isBiz'] = true;
+        $context['table'] = $table;
+        $context['provisionedreadcapacity'] = $describeDynamoDbTableResult['Table']['ProvisionedThroughput']['ReadCapacityUnits'];
+        $context['provisionedwritecapacity'] = $describeDynamoDbTableResult['Table']['ProvisionedThroughput']['WriteCapacityUnits'];
+
+        return $ruler->assert($ruleUp, $context);
     }
 }
